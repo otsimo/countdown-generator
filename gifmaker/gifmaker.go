@@ -18,7 +18,7 @@ import (
 
 var (
 	dpi      = flag.Float64("dpi", 72, "screen resolution in Dots Per Inch")
-	fontfile = flag.String("fontfile", "../../testdata/luxisr.ttf", "filename of the ttf font")
+	fontfile = flag.String("fontfile", "fonts/luxisr.ttf", "filename of the ttf font")
 	hinting  = flag.String("hinting", "none", "none | full")
 	spacing  = flag.Float64("spacing", 1.5, "line spacing (e.g. 2 means double spaced)")
 	wonb     = flag.Bool("whiteonblack", false, "white text on a black background")
@@ -46,10 +46,18 @@ func MakeGif(expires time.Time, maxWidth int) (bytes.Buffer, error) {
 }
 
 func GetTimeFragments(dif time.Duration) (timeString string) {
-	days := math.Floor(dif.Seconds() / (60 * 60 * 24))
-	hours := math.Floor((dif.Seconds()/(60*60) - (days * 24)))
-	minutes := math.Floor((dif.Seconds()/(60) - (days * 24 * 60) - (hours * 60)))
-	seconds := math.Floor(dif.Seconds() - (days * 60 * 60 * 24) - (hours * 60 * 60) - (minutes * 60))
+	var days, hours, minutes, seconds float64
+	if dif > 0 {
+		days = math.Floor(dif.Seconds() / (60 * 60 * 24))
+		hours = math.Floor((dif.Seconds()/(60*60) - (days * 24)))
+		minutes = math.Floor((dif.Seconds()/(60) - (days * 24 * 60) - (hours * 60)))
+		seconds = math.Floor(dif.Seconds() - (days * 60 * 60 * 24) - (hours * 60 * 60) - (minutes * 60))
+	} else {
+		days = 0
+		hours = 0
+		minutes = 0
+		seconds = 0
+	}
 	return fmt.Sprintf("%02.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
 }
 
