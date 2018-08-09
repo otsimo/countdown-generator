@@ -2,7 +2,6 @@ package gifmaker
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -16,13 +15,6 @@ import (
 	"golang.org/x/image/font"
 )
 
-var (
-	dpi      = flag.Float64("dpi", 72, "screen resolution in Dots Per Inch")
-	fontfile = flag.String("fontfile", "fonts/luxisr.ttf", "filename of the ttf font")
-	hinting  = flag.String("hinting", "none", "none | full")
-	spacing  = flag.Float64("spacing", 1.5, "line spacing (e.g. 2 means double spaced)")
-	wonb     = flag.Bool("whiteonblack", false, "white text on a black background")
-)
 var palette = []color.Color{color.White, color.Black}
 var context *freetype.Context
 
@@ -74,8 +66,8 @@ func AddLabel(img *image.Paletted, x, y int, label string, fontSize float64) err
 	return nil
 }
 
-func SetContext() error {
-	fontBytes, err := ioutil.ReadFile(*fontfile)
+func SetContext(conf GifServerConf) error {
+	fontBytes, err := ioutil.ReadFile(conf.FontFile)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -88,7 +80,7 @@ func SetContext() error {
 	fg := image.Black
 
 	c := freetype.NewContext()
-	c.SetDPI(*dpi)
+	c.SetDPI(conf.Dpi)
 	c.SetFont(f)
 	c.SetHinting(font.HintingNone)
 	c.SetSrc(fg)

@@ -8,11 +8,13 @@ import (
 )
 
 type GifServerConf struct {
-	Port int
+	Port     int
+	Dpi      float64
+	FontFile string
 }
 
 func CreateGifServer(conf GifServerConf) {
-	err := SetContext()
+	err := SetContext(conf)
 	if err != nil {
 		log.Fatal("Context could not be set err:", err)
 	}
