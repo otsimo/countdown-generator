@@ -28,17 +28,28 @@ func CreateGifServer(conf GifServerConf) {
 // CountdownRequest Method that takes in a date and serves a countdown
 func CountdownRequest(w http.ResponseWriter, r *http.Request) {
 	str := r.URL.Query().Get("expires")
-	width, _ := strconv.Atoi(r.URL.Query().Get("width"))
+	fg := r.URL.Query().Get("fg")
+	bg := r.URL.Query().Get("bg")
+	wd := r.URL.Query().Get("width")
+	if wd == "" {
+		wd = "500"
+	}
+	width, _ := strconv.Atoi(wd)
+	if str == "" {
+		str = "2016-01-01T01:01:01"
+	}
 	expires, err := time.Parse(
 		"2006-01-02T15:04:05",
 		str)
 	if err != nil {
 		w.Write([]byte("Error Parsing the Time"))
 	}
+	w.Header().Set("Content-Type", "image/gif")
+	w.Header().Set("Cache-Control", "no-cache")
 	// expires = expires.AddDate(0, -3, 0)
 	expires = expires.Add(time.Duration(-3) * time.Hour)
 
-	gifBuffer, err := MakeGif(expires, width)
+	gifBuffer, err := MakeGif(expires, width, bg, fg)
 	if err != nil {
 		w.Write([]byte("Error Creating the GIF"))
 	}

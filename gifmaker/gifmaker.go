@@ -2,13 +2,16 @@ package gifmaker
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/gif"
 	"io/ioutil"
 	"log"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/golang/freetype"
@@ -18,14 +21,33 @@ import (
 var palette = []color.Color{color.White, color.Black}
 var context *freetype.Context
 
-func MakeGif(expires time.Time, maxWidth int) (bytes.Buffer, error) {
+func MakeGif(expires time.Time, maxWidth int, bg string, fg string) (bytes.Buffer, error) {
+	palette = []color.Color{color.White, color.Black}
 	out := &gif.GIF{}
 	now := time.Now()
+	if fg == "" {
+		fg = "000000"
+	}
+	fontColor, _ := hexToRGBA(fg)
+	if fontColor != nil {
+		palette = append(palette, fontColor)
+		context.SetSrc(image.NewUniform(fontColor))
+	}
+	if bg == "" {
+		bg = "ffffff"
+	}
+
+	bCol, _ := hexToRGBA(bg)
+	if bCol != nil {
+		palette = append(palette, bCol)
+	}
+
 	for n := 0; n < 60; n++ {
 		dif := expires.Sub(now)
-		offset := maxWidth / 14
+		offset := maxWidth / 50
 		timeString := GetTimeFragments(dif)
-		img := image.NewPaletted(image.Rect(0, 0, maxWidth, maxWidth/4), palette)
+		img := image.NewPaletted(image.Rect(0, 0, maxWidth, maxWidth/5), palette)
+		draw.Draw(img, img.Bounds(), &image.Uniform{bCol}, image.ZP, draw.Src)
 		AddLabel(img, offset, 0, timeString, float64(maxWidth)*0.175)
 		out.Image = append(out.Image, img)
 		out.Delay = append(out.Delay, 100)
@@ -77,14 +99,41 @@ func SetContext(conf GifServerConf) error {
 		log.Println(err)
 		return err
 	}
-	fg := image.Black
+
+	fg := image.NewUniform(color.NRGBA{255, 0, 0, 255})
 
 	c := freetype.NewContext()
 	c.SetDPI(conf.Dpi)
+
 	c.SetFont(f)
 	c.SetHinting(font.HintingNone)
 	c.SetSrc(fg)
 
 	context = c
 	return nil
+}
+
+func hexToRGBA(hex string) (color.Color, error) {
+	log.Printf("%s", hex)
+	if len(hex) != 6 {
+		return nil, errors.New("Color Provided not Hex")
+	}
+	r, err := strconv.ParseInt(hex[0:2], 16, 64)
+	if err != nil {
+		log.Printf("%s", err)
+		return nil, err
+	}
+	g, err := strconv.ParseInt(hex[2:4], 16, 64)
+	if err != nil {
+		log.Printf("%s", err)
+		return nil, err
+	}
+	b, err := strconv.ParseInt(hex[4:6], 16, 64)
+	if err != nil {
+		log.Printf("%s", err)
+		return nil, err
+	}
+
+	a := 255
+	return color.NRGBA{uint8(r), uint8(g), uint8(b), uint8(a)}, nil
 }
