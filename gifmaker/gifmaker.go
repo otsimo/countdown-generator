@@ -8,47 +8,90 @@ import (
 	"image/color"
 	"image/draw"
 	"image/gif"
-	"io/ioutil"
 	"log"
 	"math"
 	"strconv"
 	"time"
 
+	"github.com/golang/freetype/truetype"
+
 	"github.com/golang/freetype"
 	"golang.org/x/image/font"
 )
 
-var palette = []color.Color{color.White, color.Black}
-var context *freetype.Context
+type GifMaker interface {
+	MakeGif(expires time.Time) (*bytes.Buffer, error)
+}
 
-func MakeGif(expires time.Time, maxWidth int, bg string, fg string) (bytes.Buffer, error) {
-	palette = []color.Color{color.White, color.Black}
+func NewGifMaker(g Config) (GifMaker, error) {
+	c := freetype.NewContext()
+
+	if g.Fg == "" {
+		g.Fg = "000000"
+	}
+	fontColor, err := hexToRGBA(g.Fg)
+	if err != nil {
+		fontColor = color.NRGBA{0, 0, 0, 255}
+	}
+	fmt.Println("Font Color", g.Fg)
+
+	if g.Bg == "" {
+		g.Bg = "ffffff"
+	}
+	bCol, err := hexToRGBA(g.Bg)
+	if err != nil {
+		bCol = color.NRGBA{255, 255, 255, 255}
+	}
+	fmt.Println("Backfground Color", g.Bg)
+
+	if g.FontSize == 0 {
+		g.FontSize = 16
+	}
+
+	c.SetDPI(g.Dpi)
+	c.SetFont(g.Font)
+	c.SetHinting(font.HintingNone)
+	c.SetSrc(image.NewUniform(fontColor))
+	c.SetFontSize(g.FontSize)
+
+	return &gifMaker{
+		context:  *c,
+		bg:       bCol,
+		fg:       fontColor,
+		font:     g.Font,
+		fontSize: g.FontSize,
+		dpi:      g.Dpi,
+	}, nil
+}
+
+type Config struct {
+	FontSize float64
+	Dpi      float64
+	Font     *truetype.Font
+	Fg       string
+	Bg       string
+}
+
+type gifMaker struct {
+	bg       color.Color
+	fg       color.Color
+	font     *truetype.Font
+	fontSize float64
+	dpi      float64
+	context  freetype.Context
+}
+
+func (gm *gifMaker) MakeGif(expires time.Time) (*bytes.Buffer, error) {
 	out := &gif.GIF{}
 	now := time.Now()
-	if fg == "" {
-		fg = "000000"
-	}
-	fontColor, _ := hexToRGBA(fg)
-	if fontColor != nil {
-		palette = append(palette, fontColor)
-		context.SetSrc(image.NewUniform(fontColor))
-	}
-	if bg == "" {
-		bg = "ffffff"
-	}
-
-	bCol, _ := hexToRGBA(bg)
-	if bCol != nil {
-		palette = append(palette, bCol)
-	}
 
 	for n := 0; n < 60; n++ {
 		dif := expires.Sub(now)
-		offset := maxWidth / 50
-		timeString := GetTimeFragments(dif)
-		img := image.NewPaletted(image.Rect(0, 0, maxWidth, maxWidth/5), palette)
-		draw.Draw(img, img.Bounds(), &image.Uniform{bCol}, image.ZP, draw.Src)
-		AddLabel(img, offset, 0, timeString, float64(maxWidth)*0.175)
+		timeString := getTimeFragments(dif)
+		img, err := gm.createFrame(timeString)
+		if err != nil {
+			return nil, err
+		}
 		out.Image = append(out.Image, img)
 		out.Delay = append(out.Delay, 100)
 		expires = expires.Add(time.Duration(-1) * time.Second)
@@ -56,65 +99,65 @@ func MakeGif(expires time.Time, maxWidth int, bg string, fg string) (bytes.Buffe
 	buf := new(bytes.Buffer)
 	gif.EncodeAll(buf, out)
 
-	return *buf, nil
+	return buf, nil
 }
 
-func GetTimeFragments(dif time.Duration) (timeString string) {
+func getTimeFragments(dif time.Duration) (timeString string) {
 	var days, hours, minutes, seconds float64
 	if dif > 0 {
 		days = math.Floor(dif.Seconds() / (60 * 60 * 24))
 		hours = math.Floor((dif.Seconds()/(60*60) - (days * 24)))
 		minutes = math.Floor((dif.Seconds()/(60) - (days * 24 * 60) - (hours * 60)))
 		seconds = math.Floor(dif.Seconds() - (days * 60 * 60 * 24) - (hours * 60 * 60) - (minutes * 60))
+		if days == 0 {
+			return fmt.Sprintf("%02.f:%02.f:%02.f", hours, minutes, seconds)
+		}
+		if days == 0 && hours == 0 {
+			return fmt.Sprintf("%02.f:%02.f", minutes, seconds)
+		} else {
+			return fmt.Sprintf("%02.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
+		}
 	} else {
 		days = 0
 		hours = 0
 		minutes = 0
 		seconds = 0
+		return fmt.Sprintf("%02.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
 	}
-	return fmt.Sprintf("%02.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
+	return ""
 }
 
-//AddLabel function that takes in maxWidth, labels and their locations in x and y coordinates
-func AddLabel(img *image.Paletted, x, y int, label string, fontSize float64) error {
-	context.SetClip(img.Bounds())
-	context.SetDst(img)
-	context.SetFontSize(fontSize)
-	pt := freetype.Pt(x, y+int(context.PointToFixed(fontSize)>>6))
-	_, err := context.DrawString(label, pt)
-	if err != nil {
-		return err
+func (gm *gifMaker) createFrame(timeString string) (*image.Paletted, error) {
+	// palette := []color.Color{gm.fg, gm.bg}
+	var palette = color.Palette{color.White, color.Black, gm.fg, gm.bg}
+	backgroundHeight := 0
+	backgroundWidth := 0
+
+	for _, letter := range timeString {
+		nf := truetype.NewFace(gm.font, &truetype.Options{Size: gm.fontSize, DPI: gm.dpi, Hinting: font.HintingNone})
+		r, a, _ := nf.GlyphBounds(letter)
+		if backgroundHeight == 0 {
+			backgroundHeight = int(math.Abs(float64(r.Min.Y.Round() - r.Max.Y.Round())))
+		}
+		backgroundWidth += int(a.Round())
 	}
-	return nil
-}
-
-func SetContext(conf GifServerConf) error {
-	fontBytes, err := ioutil.ReadFile(conf.FontFile)
+	backgroundWidth = int(float64(backgroundWidth) * 1.1)
+	backgroundHeight = int(float64(backgroundHeight) * 1.1)
+	background := image.NewPaletted(image.Rect(0, 0, backgroundWidth, backgroundHeight), palette)
+	gm.context.SetDst(background)
+	gm.context.SetClip(background.Bounds())
+	fontBackGroundColor := image.NewUniform(gm.bg)
+	draw.Draw(background, background.Bounds(), fontBackGroundColor, image.ZP, draw.Src)
+	pt := freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*19/20)
+	_, err := gm.context.DrawString(timeString, pt)
 	if err != nil {
-		log.Println(err)
-		return err
+		fmt.Println(err)
+		return nil, err
 	}
-	f, err := freetype.ParseFont(fontBytes)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	fg := image.NewUniform(color.NRGBA{255, 0, 0, 255})
-
-	c := freetype.NewContext()
-	c.SetDPI(conf.Dpi)
-
-	c.SetFont(f)
-	c.SetHinting(font.HintingNone)
-	c.SetSrc(fg)
-
-	context = c
-	return nil
+	return background, nil
 }
 
 func hexToRGBA(hex string) (color.Color, error) {
-	log.Printf("%s", hex)
 	if len(hex) != 6 {
 		return nil, errors.New("Color Provided not Hex")
 	}
@@ -133,7 +176,6 @@ func hexToRGBA(hex string) (color.Color, error) {
 		log.Printf("%s", err)
 		return nil, err
 	}
-
 	a := 255
 	return color.NRGBA{uint8(r), uint8(g), uint8(b), uint8(a)}, nil
 }
