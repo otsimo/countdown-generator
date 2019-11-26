@@ -17,6 +17,7 @@ import (
 
 	"github.com/golang/freetype"
 	"golang.org/x/image/font"
+	"golang.org/x/image/math/fixed"
 )
 
 type GifMaker interface {
@@ -55,30 +56,33 @@ func NewGifMaker(g Config) (GifMaker, error) {
 	c.SetFontSize(g.FontSize)
 
 	return &gifMaker{
-		context:  *c,
-		bg:       bCol,
-		fg:       fontColor,
-		font:     g.Font,
-		fontSize: g.FontSize,
-		dpi:      g.Dpi,
+		context:    *c,
+		bg:         bCol,
+		fg:         fontColor,
+		font:       g.Font,
+		fontSize:   g.FontSize,
+		dpi:        g.Dpi,
+		timeMarker: g.TimeMarker,
 	}, nil
 }
 
 type Config struct {
-	FontSize float64
-	Dpi      float64
-	Font     *truetype.Font
-	Fg       string
-	Bg       string
+	FontSize   float64
+	Dpi        float64
+	Font       *truetype.Font
+	Fg         string
+	Bg         string
+	TimeMarker bool
 }
 
 type gifMaker struct {
-	bg       color.Color
-	fg       color.Color
-	font     *truetype.Font
-	fontSize float64
-	dpi      float64
-	context  freetype.Context
+	bg         color.Color
+	fg         color.Color
+	font       *truetype.Font
+	timeMarker bool
+	fontSize   float64
+	dpi        float64
+	context    freetype.Context
 }
 
 func (gm *gifMaker) MakeGif(expires time.Time) (*bytes.Buffer, error) {
@@ -130,6 +134,8 @@ func getTimeFragments(dif time.Duration) (timeString string) {
 func (gm *gifMaker) createFrame(timeString string) (*image.Paletted, error) {
 	// palette := []color.Color{gm.fg, gm.bg}
 	var palette = color.Palette{color.White, color.Black, gm.fg, gm.bg}
+	var pt fixed.Point26_6
+	var background *image.Paletted
 	backgroundHeight := 0
 	backgroundWidth := 0
 
@@ -142,18 +148,47 @@ func (gm *gifMaker) createFrame(timeString string) (*image.Paletted, error) {
 		backgroundWidth += int(a.Round())
 	}
 	backgroundWidth = int(float64(backgroundWidth) * 1.1)
-	backgroundHeight = int(float64(backgroundHeight) * 1.1)
-	background := image.NewPaletted(image.Rect(0, 0, backgroundWidth, backgroundHeight), palette)
-	gm.context.SetDst(background)
-	gm.context.SetClip(background.Bounds())
-	fontBackGroundColor := image.NewUniform(gm.bg)
-	draw.Draw(background, background.Bounds(), fontBackGroundColor, image.ZP, draw.Src)
-	pt := freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*19/20)
+
+	if gm.timeMarker == true {
+		var markerString string
+		if len(timeString) == 11 {
+			markerString = "DAY HOUR MIN SEC"
+			gm.context.SetFontSize(gm.fontSize * 11 / 16)
+
+		} else if len(timeString) == 8 {
+			markerString = "HOUR MIN SEC"
+			gm.context.SetFontSize(gm.fontSize * 2 / 3)
+		}
+
+		backgroundHeight = int(float64(backgroundHeight) * 2.5)
+		pt = freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*10/20)
+		pt2 := freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*19/20)
+		background = image.NewPaletted(image.Rect(0, 0, backgroundWidth, backgroundHeight), palette)
+		gm.context.SetDst(background)
+		gm.context.SetClip(background.Bounds())
+		fontBackGroundColor := image.NewUniform(gm.bg)
+		draw.Draw(background, background.Bounds(), fontBackGroundColor, image.ZP, draw.Src)
+		_, err := gm.context.DrawString(markerString, pt2)
+		if err != nil {
+			fmt.Errorf("error printing time marker err:%s", err)
+		}
+		gm.context.SetFontSize(gm.fontSize)
+
+	} else {
+		backgroundHeight = int(float64(backgroundHeight) * 1.1)
+		pt = freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*19/20)
+		background = image.NewPaletted(image.Rect(0, 0, backgroundWidth, backgroundHeight), palette)
+		gm.context.SetDst(background)
+		gm.context.SetClip(background.Bounds())
+		fontBackGroundColor := image.NewUniform(gm.bg)
+		draw.Draw(background, background.Bounds(), fontBackGroundColor, image.ZP, draw.Src)
+	}
 	_, err := gm.context.DrawString(timeString, pt)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
+
 	return background, nil
 }
 
