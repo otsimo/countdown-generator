@@ -115,6 +115,12 @@ func CountdownRequestPTM(w http.ResponseWriter, r *http.Request) {
 	fg := r.URL.Query().Get("fg")
 	bg := r.URL.Query().Get("bg")
 	fontSize, _ := strconv.ParseFloat(r.URL.Query().Get("fontSize"), 64)
+	tm := r.URL.Query().Get("marker")
+	timeMarker := false
+
+	if tm == "true" {
+		timeMarker = true
+	}
 
 	if str == "" {
 		str = "2016-01-01T01:01:01"
@@ -131,11 +137,12 @@ func CountdownRequestPTM(w http.ResponseWriter, r *http.Request) {
 	expires = expires.Add(time.Duration(-3) * time.Hour)
 
 	conf := gifmaker.Config{
-		FontSize: fontSize,
-		Dpi:      72,
-		Font:     PTM,
-		Fg:       fg,
-		Bg:       bg,
+		FontSize:   fontSize,
+		Dpi:        72,
+		Font:       PTM,
+		Fg:         fg,
+		Bg:         bg,
+		TimeMarker: timeMarker,
 	}
 	gm, err := gifmaker.NewGifMaker(conf)
 	if err != nil {
