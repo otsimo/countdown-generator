@@ -56,33 +56,36 @@ func NewGifMaker(g Config) (GifMaker, error) {
 	c.SetFontSize(g.FontSize)
 
 	return &gifMaker{
-		context:    *c,
-		bg:         bCol,
-		fg:         fontColor,
-		font:       g.Font,
-		fontSize:   g.FontSize,
-		dpi:        g.Dpi,
-		timeMarker: g.TimeMarker,
+		context:          *c,
+		bg:               bCol,
+		fg:               fontColor,
+		font:             g.Font,
+		fontSize:         g.FontSize,
+		dpi:              g.Dpi,
+		timeMarker:       g.TimeMarker,
+		markerFontOffset: g.MarkerFontOffset,
 	}, nil
 }
 
 type Config struct {
-	FontSize   float64
-	Dpi        float64
-	Font       *truetype.Font
-	Fg         string
-	Bg         string
-	TimeMarker bool
+	FontSize         float64
+	Dpi              float64
+	Font             *truetype.Font
+	Fg               string
+	Bg               string
+	TimeMarker       bool
+	MarkerFontOffset float64
 }
 
 type gifMaker struct {
-	bg         color.Color
-	fg         color.Color
-	font       *truetype.Font
-	timeMarker bool
-	fontSize   float64
-	dpi        float64
-	context    freetype.Context
+	bg               color.Color
+	fg               color.Color
+	font             *truetype.Font
+	timeMarker       bool
+	markerFontOffset float64
+	fontSize         float64
+	dpi              float64
+	context          freetype.Context
 }
 
 func (gm *gifMaker) MakeGif(expires time.Time) (*bytes.Buffer, error) {
@@ -153,16 +156,16 @@ func (gm *gifMaker) createFrame(timeString string) (*image.Paletted, error) {
 		var markerString string
 		if len(timeString) == 11 {
 			markerString = "DAY HOUR MIN SEC"
-			gm.context.SetFontSize(gm.fontSize * 11 / 16)
-
 		} else if len(timeString) == 8 {
 			markerString = "HOUR MIN SEC"
-			gm.context.SetFontSize(gm.fontSize * 2 / 3)
 		}
+		fs := gm.fontSize * float64(len(timeString)) / float64(len(markerString)) * gm.markerFontOffset
+		fmt.Println(fs)
+		gm.context.SetFontSize(fs)
 
 		backgroundHeight = int(float64(backgroundHeight) * 2.5)
 		pt = freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*10/20)
-		pt2 := freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*19/20)
+		pt2 := freetype.Pt(int(float64(backgroundWidth)*4.5/100), backgroundHeight*17/20)
 		background = image.NewPaletted(image.Rect(0, 0, backgroundWidth, backgroundHeight), palette)
 		gm.context.SetDst(background)
 		gm.context.SetClip(background.Bounds())
