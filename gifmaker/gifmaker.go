@@ -122,7 +122,7 @@ func getTimeFragments(dif time.Duration) (timeString string) {
 		if days == 0 && hours == 0 {
 			return fmt.Sprintf("%02.f:%02.f", minutes, seconds)
 		} else {
-			return fmt.Sprintf("%02.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
+			return fmt.Sprintf("%01.f:%02.f:%02.f:%02.f", days, hours, minutes, seconds)
 		}
 	} else {
 		days = 0
